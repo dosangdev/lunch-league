@@ -116,7 +116,7 @@ export function LinksView({
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
         {matches.length === 0 ? (
           <div className="col-span-2 py-10 text-center text-sm text-slate-400">
-            생성된 예선 경기가 없습니다. [대회 관리] 탭에서 링크제 대진을 생성해 주세요.
+            생성된 예선 경기가 없습니다. 대회 관리 페이지에서 링크제 대진을 생성해 주세요.
           </div>
         ) : (
           matches.map((match, index) => (

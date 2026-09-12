@@ -23,6 +23,13 @@ import {
 import { sportIcon, sportLabel } from "@/lib/league";
 import type { GradeSports, Sport, TeamGroup } from "@/lib/types";
 
+function previewLinkMatches(teams: string[]) {
+  const names = teams.map((team) => team.trim()).filter(Boolean);
+  if (names.length < 2) return [];
+  if (names.length === 2) return [`${names[0]} vs ${names[1]}`];
+  return names.map((team, index) => `${team} vs ${names[(index + 1) % names.length]}`);
+}
+
 export function AdminView({
   isAdmin,
   currentGrade,
@@ -31,6 +38,7 @@ export function AdminView({
   groups,
   onLogin,
   onSetGradeSport,
+  onSelectGrade,
   onChangeGroups,
   onRegenerate,
   onExport,
@@ -44,6 +52,7 @@ export function AdminView({
   groups: TeamGroup[];
   onLogin: () => void;
   onSetGradeSport: (grade: 1 | 2 | 3, sport: Sport) => void;
+  onSelectGrade: (grade: 1 | 2 | 3) => void;
   onChangeGroups: (groups: TeamGroup[]) => void;
   onRegenerate: () => void;
   onExport: () => void;
@@ -91,14 +100,21 @@ export function AdminView({
           {([1, 2, 3] as const).map((grade) => {
             const sport = gradeSports[grade];
             return (
-              <div key={grade} className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+              <div
+                key={grade}
+                className={`space-y-2 rounded-xl border p-4 ${
+                  sport === "ultimate"
+                    ? "border-indigo-300 bg-indigo-50"
+                    : "border-amber-300 bg-amber-50"
+                }`}
+              >
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-bold text-slate-800">
                     <GraduationCap className="mr-1 inline h-4 w-4 text-indigo-600" /> {grade}학년
                   </span>
                   <span
-                    className={`rounded px-2 py-0.5 text-xs font-bold ${
-                      sport === "ultimate" ? "bg-indigo-100 text-indigo-700" : "bg-amber-100 text-amber-700"
+                    className={`rounded px-2 py-0.5 text-xs font-extrabold text-white ${
+                      sport === "ultimate" ? "bg-indigo-600" : "bg-amber-600"
                     }`}
                   >
                     {sportIcon(sport)} {sportLabel(sport)}
@@ -107,13 +123,21 @@ export function AdminView({
                 <div className="flex gap-2 pt-1">
                   <button
                     onClick={() => onSetGradeSport(grade, "ultimate")}
-                    className="flex-1 rounded-lg border bg-white py-1.5 text-xs font-bold text-slate-700 shadow-sm hover:bg-slate-100"
+                    className={`flex-1 rounded-lg border py-1.5 text-xs font-extrabold shadow-sm transition-all ${
+                      sport === "ultimate"
+                        ? "border-indigo-700 bg-indigo-600 text-white"
+                        : "border-slate-200 bg-white text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                    }`}
                   >
                     🥏 얼티미트
                   </button>
                   <button
                     onClick={() => onSetGradeSport(grade, "volleyball")}
-                    className="flex-1 rounded-lg border bg-white py-1.5 text-xs font-bold text-slate-700 shadow-sm hover:bg-slate-100"
+                    className={`flex-1 rounded-lg border py-1.5 text-xs font-extrabold shadow-sm transition-all ${
+                      sport === "volleyball"
+                        ? "border-amber-700 bg-amber-600 text-white"
+                        : "border-slate-200 bg-white text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                    }`}
                   >
                     🏐 배구
                   </button>
@@ -128,14 +152,14 @@ export function AdminView({
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
           <div>
             <h3 className="flex items-center gap-2 text-base font-bold text-slate-800">
-              <Network className="h-4 w-4 text-indigo-600" /> 조 나누기 및 대진 순서(a, b, c, d) 지정
+              <Network className="h-4 w-4 text-indigo-600" /> {currentGrade}학년 조 나누기 · 대진 순서
             </h3>
-            <p className="text-xs text-slate-500">
-              현재 선택:{" "}
-              <span className="font-bold text-indigo-600">
-                {currentGrade}학년 {sportLabel(currentSport)}
-              </span>
-              . 팀의 순서(위/아래 이동)가 곧 링크 경기 연결 순서(1번 ➔ 2번 ➔ 3번 ➔ 4번 ➔ 1번)가 됩니다.
+            <p className="mt-1 text-xs leading-5 text-slate-500">
+              1·2·3학년 조는 각각 따로 저장됩니다. 위에서 학년을 고른 뒤 그 학년만 수정하세요.
+              <br />
+              <span className="font-semibold text-slate-700">조</span>는 같은 학년 안에서 팀을 묶는 그룹입니다. A조끼리만 예선하고, B조끼리만 예선합니다.
+              <br />
+              <span className="font-semibold text-slate-700">대진 순서</span>는 그 조 안에서 누가 누구와 도는지를 말합니다. 1번➔2번➔3번➔4번➔다시 1번.
             </p>
           </div>
           <button
@@ -148,12 +172,43 @@ export function AdminView({
             }}
             className="rounded-lg border border-slate-300 bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-700 transition-all hover:bg-slate-200"
           >
-            <FolderPlus className="mr-1 inline h-3.5 w-3.5" /> 조(Group) 추가
+            <FolderPlus className="mr-1 inline h-3.5 w-3.5" /> 조 추가
           </button>
         </div>
 
+        <div className="grid grid-cols-3 gap-2">
+          {([1, 2, 3] as const).map((grade) => {
+            const sport = gradeSports[grade];
+            const active = currentGrade === grade;
+            return (
+              <button
+                key={grade}
+                onClick={() => onSelectGrade(grade)}
+                className={`rounded-xl border px-3 py-2.5 text-left transition-all ${
+                  active
+                    ? sport === "ultimate"
+                      ? "border-indigo-700 bg-indigo-600 text-white shadow-sm"
+                      : "border-amber-700 bg-amber-600 text-white shadow-sm"
+                    : "border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100"
+                }`}
+              >
+                <p className="text-sm font-extrabold">{grade}학년</p>
+                <p className={`text-[11px] font-bold ${active ? "text-white/90" : "text-slate-400"}`}>
+                  {sportIcon(sport)} {sportLabel(sport)} 조 편집
+                </p>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-800">
+          지금 편집 중: {currentGrade}학년 {sportLabel(currentSport)} · 다른 학년 조는 그대로 유지됩니다.
+        </div>
+
         <div className="space-y-6">
-          {groups.map((group, groupIndex) => (
+          {groups.map((group, groupIndex) => {
+            const matchPreview = previewLinkMatches(group.teams);
+            return (
             <div key={group.id} className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
               <div className="flex items-center justify-between border-b border-slate-200 pb-2">
                 <div className="flex items-center space-x-2">
@@ -189,11 +244,16 @@ export function AdminView({
                 </div>
               </div>
 
-              <div className="flex items-center justify-between rounded-xl border border-indigo-100 bg-indigo-50/70 p-2.5 text-[11px] text-indigo-900">
-                <span>
+              <div className="space-y-2 rounded-xl border border-indigo-100 bg-indigo-50/70 p-2.5 text-[11px] text-indigo-900">
+                <p>
                   <Info className="mr-1 inline h-3 w-3 text-indigo-600" />
-                  <strong>링크 순서:</strong> 상단 1번팀부터 2번 ➔ 3번 ➔ 4번 ➔ 다시 1번으로 경기 연결
-                </span>
+                  위아래 화살표로 순서를 바꾸면 대진이 바뀝니다.
+                </p>
+                {matchPreview.length ? (
+                  <p className="font-semibold">이 순서면 경기: {matchPreview.join(" · ")}</p>
+                ) : (
+                  <p>팀을 2개 이상 넣으면 대진이 미리 보입니다.</p>
+                )}
               </div>
 
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -263,7 +323,8 @@ export function AdminView({
                 ))}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
@@ -284,12 +345,16 @@ export function AdminView({
         <h3 className="flex items-center gap-2 border-b border-slate-100 pb-3 text-base font-bold text-slate-800">
           <Database className="h-4 w-4 text-slate-600" /> 데이터 백업 및 초기화
         </h3>
+        <p className="text-xs text-slate-500">
+          엑셀 한 파일에 <span className="font-bold text-slate-700">1학년 / 2학년 / 3학년</span> 시트가 따로 들어갑니다.
+          각 시트는 그 학년의 대표 종목 조·예선·본선·순위입니다. 복원은 기존 JSON 파일만 가능합니다.
+        </p>
         <div className="flex flex-wrap gap-3">
           <button
             onClick={onExport}
             className="flex items-center gap-1.5 rounded-lg bg-slate-700 px-4 py-2 text-xs font-bold text-white shadow transition-all hover:bg-slate-800"
           >
-            <Download className="h-3.5 w-3.5" /> 데이터 백업 (JSON 내보내기)
+            <Download className="h-3.5 w-3.5" /> 데이터 백업 (엑셀)
           </button>
           <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-300 bg-slate-100 px-4 py-2 text-xs font-bold text-slate-700 shadow-sm transition-all hover:bg-slate-200">
             <Upload className="h-3.5 w-3.5" /> 데이터 복원 (JSON 가져오기)

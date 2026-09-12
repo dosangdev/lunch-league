@@ -65,7 +65,7 @@ export function saveMatch(payload: {
   matchId: string;
   fields: Partial<MatchRecord>;
 }) {
-  return parseJson<AppStateResponse>(
+  return parseJson<{ ok: boolean }>(
     fetch("/api/league/matches", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

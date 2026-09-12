@@ -175,21 +175,9 @@ export function MatchCard({
               <div className="flex flex-1 items-center justify-center space-x-2">
                 {isAdmin ? (
                   <>
-                    <input
-                      type="number"
-                      min={0}
-                      value={a}
-                      onChange={(event) => onScoreChange(aKey, Number(event.target.value) || 0)}
-                      className="w-12 rounded border bg-white py-1 text-center font-bold text-slate-800"
-                    />
+                    <ScoreStepper value={a} onChange={(value) => onScoreChange(aKey, value)} />
                     <span className="text-slate-400">:</span>
-                    <input
-                      type="number"
-                      min={0}
-                      value={b}
-                      onChange={(event) => onScoreChange(bKey, Number(event.target.value) || 0)}
-                      className="w-12 rounded border bg-white py-1 text-center font-bold text-slate-800"
-                    />
+                    <ScoreStepper value={b} onChange={(value) => onScoreChange(bKey, value)} />
                   </>
                 ) : (
                   <>
@@ -221,6 +209,34 @@ export function MatchCard({
           </button>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function ScoreStepper({ value, onChange }: { value: number; onChange: (value: number) => void }) {
+  return (
+    <div className="flex items-center overflow-hidden rounded-lg border border-slate-300 bg-white">
+      <button
+        type="button"
+        onClick={() => onChange(Math.max(0, value - 1))}
+        className="px-2 py-1 text-sm font-black text-slate-500 hover:bg-slate-100 active:bg-slate-200"
+      >
+        −
+      </button>
+      <input
+        type="number"
+        min={0}
+        value={value}
+        onChange={(event) => onChange(Math.max(0, Number(event.target.value) || 0))}
+        className="w-10 [appearance:textfield] border-x border-slate-200 bg-white py-1 text-center font-bold text-slate-800 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+      />
+      <button
+        type="button"
+        onClick={() => onChange(value + 1)}
+        className="px-2 py-1 text-sm font-black text-slate-500 hover:bg-slate-100 active:bg-slate-200"
+      >
+        +
+      </button>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/auth";
-import { getLeaguePayload, updateMatchFields } from "@/lib/data";
+import { updateMatchFields } from "@/lib/data";
 import type { MatchRecord } from "@/lib/types";
 
 export async function POST(request: Request) {
@@ -25,6 +25,5 @@ export async function POST(request: Request) {
     );
   }
 
-  const payload = await getLeaguePayload();
-  return NextResponse.json({ ...payload, isAdmin: true });
+  return NextResponse.json({ ok: true });
 }

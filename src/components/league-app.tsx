@@ -1,6 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Award,
   GraduationCap,
@@ -25,7 +27,9 @@ import {
   saveGroups,
   saveMatch,
 } from "@/lib/api";
+import { downloadLeagueExcel } from "@/lib/excel";
 import { categoryKey, createInitialCategory, sportIcon, sportLabel } from "@/lib/league";
+import { TAB_HREF, tabFromPath } from "@/lib/tabs";
 import type {
   AppStateResponse,
   GradeSports,
@@ -49,10 +53,14 @@ const TABS: { id: TabId; label: string; icon: typeof Medal }[] = [
 ];
 
 export function LeagueApp() {
+  const pathname = usePathname();
+  const router = useRouter();
+  const currentTab = tabFromPath(pathname);
+  const pendingSaves = useRef(new Map<string, Partial<MatchRecord>>());
+  const saveTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const [payload, setPayload] = useState<AppStateResponse | null>(null);
   const [currentGrade, setCurrentGrade] = useState<1 | 2 | 3>(1);
   const [viewSport, setViewSport] = useState<Sport>("ultimate");
-  const [currentTab, setCurrentTab] = useState<TabId>("standings");
   const [selectedGroup, setSelectedGroup] = useState("ALL");
   const [draftGroups, setDraftGroups] = useState<TeamGroup[]>([]);
   const [authOpen, setAuthOpen] = useState(false);
@@ -116,6 +124,7 @@ export function LeagueApp() {
     if (payload?.isAdmin) {
       const next = await logoutAdmin();
       setPayload((current) => (current ? { ...current, isAdmin: next.ok ? false : current.isAdmin } : current));
+      if (currentTab === "admin") router.push("/");
       toast("보기 전용 모드로 전환되었습니다.", "info");
       return;
     }
@@ -129,6 +138,7 @@ export function LeagueApp() {
       await loginAdmin(pin);
       setAuthOpen(false);
       setPayload((current) => (current ? { ...current, isAdmin: true } : current));
+      router.push("/admin");
       toast("관리자 권한이 활성화되었습니다.", "success");
     } catch (error) {
       setPinError(error instanceof Error ? error.message : "비밀번호가 일치하지 않습니다.");
@@ -155,20 +165,95 @@ export function LeagueApp() {
     toast(`${currentGrade}학년 종목이 '${sportLabel(sport)}'로 지정되었습니다.`, "info");
   };
 
-  const updateCurrentMatch = async (
+  const patchLocalMatch = useCallback(
+    (type: "link" | "finals", matchId: string, fields: Partial<MatchRecord>) => {
+      setPayload((current) => {
+        if (!current) return current;
+        const key = categoryKey(currentGrade, currentSport);
+        const categoryData = current.data[key];
+        if (!categoryData) return current;
+
+        if (type === "link") {
+          return {
+            ...current,
+            data: {
+              ...current.data,
+              [key]: {
+                ...categoryData,
+                linkMatches: categoryData.linkMatches.map((match) =>
+                  match.id === matchId ? { ...match, ...fields } : match,
+                ),
+              },
+            },
+          };
+        }
+
+        if (matchId !== "sf1" && matchId !== "sf2" && matchId !== "final") return current;
+        return {
+          ...current,
+          data: {
+            ...current.data,
+            [key]: {
+              ...categoryData,
+              finals: {
+                ...categoryData.finals,
+                [matchId]: { ...categoryData.finals[matchId], ...fields },
+              },
+            },
+          },
+        };
+      });
+    },
+    [currentGrade, currentSport],
+  );
+
+  const persistMatch = useCallback(
+    (type: "link" | "finals", matchId: string, fields: Partial<MatchRecord>, immediate = false) => {
+      const key = `${currentGrade}:${currentSport}:${type}:${matchId}`;
+      pendingSaves.current.set(key, { ...pendingSaves.current.get(key), ...fields });
+
+      const flush = () => {
+        const nextFields = pendingSaves.current.get(key);
+        pendingSaves.current.delete(key);
+        saveTimers.current.delete(key);
+        if (!nextFields) return;
+        saveMatch({
+          grade: currentGrade,
+          sport: currentSport,
+          type,
+          matchId,
+          fields: nextFields,
+        }).catch((error: unknown) => {
+          toast(error instanceof Error ? error.message : "경기 저장에 실패했습니다.", "warning");
+        });
+      };
+
+      const existing = saveTimers.current.get(key);
+      if (existing) clearTimeout(existing);
+      if (immediate) {
+        flush();
+        return;
+      }
+      saveTimers.current.set(key, setTimeout(flush, 250));
+    },
+    [currentGrade, currentSport, toast],
+  );
+
+  useEffect(() => {
+    return () => {
+      saveTimers.current.forEach((timer) => clearTimeout(timer));
+    };
+  }, []);
+
+  const updateCurrentMatch = (
     type: "link" | "finals",
     matchId: string,
     fields: Partial<MatchRecord>,
+    immediate = false,
   ) => {
     if (!payload?.isAdmin) return;
-    const next = await saveMatch({
-      grade: currentGrade,
-      sport: currentSport,
-      type,
-      matchId,
-      fields,
-    });
-    applyPayload(next);
+    patchLocalMatch(type, matchId, fields);
+    persistMatch(type, matchId, fields, immediate);
   };
 
   if (loading || !payload) {
@@ -283,14 +368,14 @@ export function LeagueApp() {
 
       <nav className="border-b border-slate-200 bg-slate-100">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="custom-scrollbar flex space-x-2 overflow-x-auto sm:space-x-4">
-            {TABS.map((tab) => {
+          <div className="flex flex-wrap gap-x-1 sm:gap-x-4">
+            {TABS.filter((tab) => tab.id !== "admin" || payload.isAdmin).map((tab) => {
               const Icon = tab.icon;
               const active = currentTab === tab.id;
               return (
-                <button
+                <Link
                   key={tab.id}
-                  onClick={() => setCurrentTab(tab.id)}
+                  href={TAB_HREF[tab.id]}
                   className={`flex items-center space-x-2 border-b-2 px-4 py-3 text-xs font-bold whitespace-nowrap sm:text-sm ${
                     active
                       ? "border-indigo-600 bg-indigo-50/50 text-indigo-600"
@@ -299,7 +384,7 @@ export function LeagueApp() {
                 >
                   <Icon className="h-4 w-4" />
                   <span>{tab.label}</span>
-                </button>
+                </Link>
               );
             })}
           </div>
@@ -337,16 +422,16 @@ export function LeagueApp() {
             selectedGroup={selectedGroup}
             isAdmin={payload.isAdmin}
             onSelectGroup={setSelectedGroup}
-            onUpdateMatch={async (matchId, fields) => {
-              await updateCurrentMatch("link", matchId, fields);
-              if (fields.date) toast("경기일자가 업데이트되었습니다.", "success");
+            onUpdateMatch={(matchId, fields) => {
+              updateCurrentMatch("link", matchId, fields, Boolean(fields.date || fields.status));
+              if (fields.date) toast("경기일자가 저장되었습니다.", "success");
               if (fields.status) {
                 toast(`경기 상태가 변경되었습니다. (${fields.status === "completed" ? "종료" : "진행중"})`, "success");
               }
             }}
             onResetMatch={(matchId) =>
-              ask("점수 초기화", "이 경기의 모든 세트 점수를 초기화하시겠습니까?", async () => {
-                await updateCurrentMatch("link", matchId, {
+              ask("점수 초기화", "이 경기의 모든 세트 점수를 초기화하시겠습니까?", () => {
+                updateCurrentMatch("link", matchId, {
                   s1A: 0,
                   s1B: 0,
                   s2A: 0,
@@ -354,7 +439,7 @@ export function LeagueApp() {
                   s3A: 0,
                   s3B: 0,
                   status: "pending",
-                });
+                }, true);
                 toast("경기 점수가 초기화되었습니다.", "info");
               })
             }
@@ -365,16 +450,16 @@ export function LeagueApp() {
           <FinalsView
             category={category}
             isAdmin={payload.isAdmin}
-            onUpdateFinal={async (matchId, fields) => {
-              await updateCurrentMatch("finals", matchId, fields);
-              if (fields.date) toast("경기일자가 업데이트되었습니다.", "success");
+            onUpdateFinal={(matchId, fields) => {
+              updateCurrentMatch("finals", matchId, fields, Boolean(fields.date || fields.status));
+              if (fields.date) toast("경기일자가 저장되었습니다.", "success");
               if (fields.status) {
                 toast(`경기 상태가 변경되었습니다. (${fields.status === "completed" ? "종료" : "진행중"})`, "success");
               }
             }}
             onResetFinal={(matchId) =>
-              ask("점수 초기화", "이 경기의 모든 세트 점수를 초기화하시겠습니까?", async () => {
-                await updateCurrentMatch("finals", matchId, {
+              ask("점수 초기화", "이 경기의 모든 세트 점수를 초기화하시겠습니까?", () => {
+                updateCurrentMatch("finals", matchId, {
                   s1A: 0,
                   s1B: 0,
                   s2A: 0,
@@ -382,7 +467,7 @@ export function LeagueApp() {
                   s3A: 0,
                   s3B: 0,
                   status: "pending",
-                });
+                }, true);
                 toast("경기 점수가 초기화되었습니다.", "info");
               })
             }
@@ -414,6 +499,11 @@ export function LeagueApp() {
               if (grade === currentGrade) setViewSport(sport);
               toast(`${grade}학년 대표 종목이 '${sportLabel(sport)}'로 저장되었습니다.`, "success");
             }}
+            onSelectGrade={(grade) => {
+              setCurrentGrade(grade);
+              setSelectedGroup("ALL");
+              setViewSport(payload.gradeSports[grade]);
+            }}
             onChangeGroups={setDraftGroups}
             onRegenerate={() =>
               ask(
@@ -437,14 +527,8 @@ export function LeagueApp() {
             }
             onExport={async () => {
               const data = await exportLeague();
-              const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-              const url = URL.createObjectURL(blob);
-              const anchor = document.createElement("a");
-              anchor.href = url;
-              anchor.download = `school_sports_league_backup_${new Date().toISOString().slice(0, 10)}.json`;
-              anchor.click();
-              URL.revokeObjectURL(url);
-              toast("데이터 백업 파일이 다운로드되었습니다.", "success");
+              downloadLeagueExcel(data);
+              toast("1·2·3학년 엑셀 백업이 다운로드되었습니다.", "success");
             }}
             onImport={(file) => {
               const reader = new FileReader();
