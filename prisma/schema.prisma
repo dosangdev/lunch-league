@@ -1,0 +1,67 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Setting {
+  id          String   @id @default("app")
+  gradeSports String
+  updatedAt   DateTime @updatedAt
+}
+
+model Category {
+  id      String  @id
+  grade   Int
+  sport   String
+  groups  Group[]
+  matches Match[]
+}
+
+model Group {
+  id         String   @id
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  name       String
+  sortOrder  Int
+  teams      Team[]
+
+  @@index([categoryId])
+}
+
+model Team {
+  id        String @id @default(cuid())
+  groupId   String
+  group     Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  name      String
+  sortOrder Int
+
+  @@index([groupId])
+}
+
+model Match {
+  id         String   @id
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  kind       String
+  groupId    String?
+  groupName  String?
+  name       String?
+  teamA      String
+  teamB      String
+  s1A        Int      @default(0)
+  s1B        Int      @default(0)
+  s2A        Int      @default(0)
+  s2B        Int      @default(0)
+  s3A        Int      @default(0)
+  s3B        Int      @default(0)
+  date       String   @default("")
+  status     String   @default("pending")
+  sortOrder  Int      @default(0)
+
+  @@index([categoryId])
+}

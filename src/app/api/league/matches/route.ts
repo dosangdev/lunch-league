@@ -1,0 +1,30 @@
+import { NextResponse } from "next/server";
+import { isAdmin } from "@/lib/auth";
+import { getLeaguePayload, updateMatchFields } from "@/lib/data";
+import type { MatchRecord } from "@/lib/types";
+
+export async function POST(request: Request) {
+  if (!(await isAdmin())) {
+    return NextResponse.json({ error: "관리자 권한이 필요합니다." }, { status: 401 });
+  }
+
+  const body = (await request.json()) as {
+    grade: number;
+    sport: string;
+    type: "link" | "finals";
+    matchId: string;
+    fields: Partial<MatchRecord>;
+  };
+
+  try {
+    await updateMatchFields(body.grade, body.sport, body.type, body.matchId, body.fields);
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "경기 저장에 실패했습니다." },
+      { status: 400 },
+    );
+  }
+
+  const payload = await getLeaguePayload();
+  return NextResponse.json({ ...payload, isAdmin: true });
+}
