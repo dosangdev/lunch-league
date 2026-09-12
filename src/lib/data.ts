@@ -20,17 +20,8 @@ import type {
   TeamGroup,
 } from "./types";
 
-function parseGradeSports(raw: string): GradeSports {
-  try {
-    const parsed = JSON.parse(raw) as GradeSports;
-    return {
-      1: parsed[1] || DEFAULT_GRADE_SPORTS[1],
-      2: parsed[2] || DEFAULT_GRADE_SPORTS[2],
-      3: parsed[3] || DEFAULT_GRADE_SPORTS[3],
-    };
-  } catch {
-    return DEFAULT_GRADE_SPORTS;
-  }
+function officialGradeSports(): GradeSports {
+  return { ...DEFAULT_GRADE_SPORTS };
 }
 
 function toMatchRecord(match: Match): MatchRecord {
@@ -194,7 +185,7 @@ export async function getLeaguePayload(): Promise<LeaguePayload> {
   });
 
   return {
-    gradeSports: parseGradeSports(setting?.gradeSports || ""),
+    gradeSports: officialGradeSports(),
     data,
   };
 }
@@ -223,11 +214,11 @@ function emptyDbMatch(id: string, kind: MatchKind): Match {
   };
 }
 
-export async function updateGradeSports(gradeSports: GradeSports) {
+export async function updateGradeSports(_gradeSports?: GradeSports) {
   await ensureSeeded();
   await prisma.setting.update({
     where: { id: "app" },
-    data: { gradeSports: JSON.stringify(gradeSports) },
+    data: { gradeSports: JSON.stringify(officialGradeSports()) },
   });
 }
 
@@ -295,10 +286,10 @@ export async function replaceLeaguePayload(payload: LeaguePayload) {
 
   await prisma.setting.upsert({
     where: { id: "app" },
-    update: { gradeSports: JSON.stringify(payload.gradeSports || DEFAULT_GRADE_SPORTS) },
+    update: { gradeSports: JSON.stringify(officialGradeSports()) },
     create: {
       id: "app",
-      gradeSports: JSON.stringify(payload.gradeSports || DEFAULT_GRADE_SPORTS),
+      gradeSports: JSON.stringify(officialGradeSports()),
     },
   });
 

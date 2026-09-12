@@ -14,7 +14,7 @@ export const SPORTS = ["ultimate", "volleyball"] as const;
 export const DEFAULT_GRADE_SPORTS: GradeSports = {
   1: "ultimate",
   2: "volleyball",
-  3: "ultimate",
+  3: "volleyball",
 };
 
 export function categoryKey(grade: number, sport: string) {

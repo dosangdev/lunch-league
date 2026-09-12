@@ -37,7 +37,6 @@ export function AdminView({
   gradeSports,
   groups,
   onLogin,
-  onSetGradeSport,
   onSelectGrade,
   onChangeGroups,
   onRegenerate,
@@ -51,7 +50,6 @@ export function AdminView({
   gradeSports: GradeSports;
   groups: TeamGroup[];
   onLogin: () => void;
-  onSetGradeSport: (grade: 1 | 2 | 3, sport: Sport) => void;
   onSelectGrade: (grade: 1 | 2 | 3) => void;
   onChangeGroups: (groups: TeamGroup[]) => void;
   onRegenerate: () => void;
@@ -91,9 +89,9 @@ export function AdminView({
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
           <div>
             <h3 className="flex items-center gap-2 text-base font-bold text-slate-800">
-              <Layers className="h-4 w-4 text-indigo-600" /> 학년별 대표 종목 지정
+              <Layers className="h-4 w-4 text-indigo-600" /> 학년별 종목
             </h3>
-            <p className="text-xs text-slate-500">1, 2, 3학년 각각 진행할 리그 종목을 지정할 수 있으며 선택 즉시 저장됩니다.</p>
+            <p className="text-xs text-slate-500">1학년은 얼티미트, 2·3학년은 배구로 고정되어 있습니다.</p>
           </div>
         </div>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -120,28 +118,7 @@ export function AdminView({
                     {sportIcon(sport)} {sportLabel(sport)}
                   </span>
                 </div>
-                <div className="flex gap-2 pt-1">
-                  <button
-                    onClick={() => onSetGradeSport(grade, "ultimate")}
-                    className={`flex-1 rounded-lg border py-1.5 text-xs font-extrabold shadow-sm transition-all ${
-                      sport === "ultimate"
-                        ? "border-indigo-700 bg-indigo-600 text-white"
-                        : "border-slate-200 bg-white text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-                    }`}
-                  >
-                    🥏 얼티미트
-                  </button>
-                  <button
-                    onClick={() => onSetGradeSport(grade, "volleyball")}
-                    className={`flex-1 rounded-lg border py-1.5 text-xs font-extrabold shadow-sm transition-all ${
-                      sport === "volleyball"
-                        ? "border-amber-700 bg-amber-600 text-white"
-                        : "border-slate-200 bg-white text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-                    }`}
-                  >
-                    🏐 배구
-                  </button>
-                </div>
+                <p className="pt-1 text-xs font-bold text-slate-500">종목 변경 불가</p>
               </div>
             );
           })}

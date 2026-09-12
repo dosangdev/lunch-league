@@ -7,7 +7,7 @@ function sessionToken() {
 }
 
 export function getAdminPin() {
-  return process.env.ADMIN_PIN || "1994";
+  return process.env.ADMIN_PIN || "899196";
 }
 
 export async function isAdmin() {

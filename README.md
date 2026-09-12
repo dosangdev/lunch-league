@@ -20,7 +20,7 @@
 ```bash
 DATABASE_URL="postgresql://postgres.PROJECT_REF:PASSWORD@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres?pgbouncer=true&connection_limit=1"
 DIRECT_URL="postgresql://postgres.PROJECT_REF:PASSWORD@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres"
-ADMIN_PIN=1994
+ADMIN_PIN=899196
 ADMIN_SESSION_TOKEN=change-this-to-a-long-random-string
 ```
 
@@ -38,7 +38,7 @@ npm run dev
 
 브라우저에서 [http://localhost:3000](http://localhost:3000) 을 엽니다.
 
-처음 접속하면 기본 학년/종목 데이터가 자동으로 들어갑니다. 관리자 PIN 기본값: `1994`
+처음 접속하면 기본 학년/종목 데이터가 자동으로 들어갑니다. 관리자 PIN 기본값: `899196`
 
 로컬 SQLite에 있던 데이터가 있다면 관리자 화면에서 JSON으로 백업한 뒤, Supabase 연결 후 같은 화면에서 복원하면 됩니다.
 
