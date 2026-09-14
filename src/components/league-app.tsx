@@ -81,6 +81,7 @@ export function LeagueApp() {
     { id: number; message: string; tone: ToastTone }[]
   >([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   const toast = useCallback((message: string, tone: ToastTone = "info") => {
     const id = Date.now() + Math.random();
@@ -100,24 +101,23 @@ export function LeagueApp() {
   );
 
   const load = useCallback(async () => {
-    const next = await fetchLeague();
-    setPayload(next);
-    const sport = next.gradeSports[1] || DEFAULT_GRADE_SPORTS[1];
-    setDraftGroups(next.data[categoryKey(1, sport)]?.groups || []);
-    setLoading(false);
+    setLoading(true);
+    setLoadError("");
+    try {
+      const next = await fetchLeague();
+      setPayload(next);
+      const sport = next.gradeSports[1] || DEFAULT_GRADE_SPORTS[1];
+      setDraftGroups(next.data[categoryKey(1, sport)]?.groups || []);
+    } catch (error: unknown) {
+      setLoadError(error instanceof Error ? error.message : "데이터를 불러오지 못했습니다.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    load().catch((error: unknown) => {
-      toast(
-        error instanceof Error
-          ? error.message
-          : "데이터를 불러오지 못했습니다.",
-        "warning",
-      );
-      setLoading(false);
-    });
-  }, [load, toast]);
+    void load();
+  }, [load]);
 
   const currentSport =
     payload?.gradeSports[currentGrade] || DEFAULT_GRADE_SPORTS[currentGrade];
@@ -227,6 +227,32 @@ export function LeagueApp() {
     [currentGrade, currentSport],
   );
 
+  const flushPendingMatch = useCallback(
+    (key: string) => {
+      const nextFields = pendingSaves.current.get(key);
+      pendingSaves.current.delete(key);
+      const timer = saveTimers.current.get(key);
+      if (timer) clearTimeout(timer);
+      saveTimers.current.delete(key);
+      if (!nextFields) return;
+
+      const [grade, sport, type, ...matchIdParts] = key.split(":");
+      saveMatch({
+        grade: Number(grade),
+        sport,
+        type: type as "link" | "finals",
+        matchId: matchIdParts.join(":"),
+        fields: nextFields,
+      }).catch((error: unknown) => {
+        toast(
+          error instanceof Error ? error.message : "경기 저장에 실패했습니다.",
+          "warning",
+        );
+      });
+    },
+    [toast],
+  );
+
   const persistMatch = useCallback(
     (
       type: "link" | "finals",
@@ -240,43 +266,27 @@ export function LeagueApp() {
         ...fields,
       });
 
-      const flush = () => {
-        const nextFields = pendingSaves.current.get(key);
-        pendingSaves.current.delete(key);
-        saveTimers.current.delete(key);
-        if (!nextFields) return;
-        saveMatch({
-          grade: currentGrade,
-          sport: currentSport,
-          type,
-          matchId,
-          fields: nextFields,
-        }).catch((error: unknown) => {
-          toast(
-            error instanceof Error
-              ? error.message
-              : "경기 저장에 실패했습니다.",
-            "warning",
-          );
-        });
-      };
-
       const existing = saveTimers.current.get(key);
       if (existing) clearTimeout(existing);
       if (immediate) {
-        flush();
+        flushPendingMatch(key);
         return;
       }
-      saveTimers.current.set(key, setTimeout(flush, 250));
+      saveTimers.current.set(key, setTimeout(() => flushPendingMatch(key), 250));
     },
-    [currentGrade, currentSport, toast],
+    [currentGrade, currentSport, flushPendingMatch],
   );
 
   useEffect(() => {
-    return () => {
-      saveTimers.current.forEach((timer) => clearTimeout(timer));
+    const flushAll = () => {
+      [...pendingSaves.current.keys()].forEach((key) => flushPendingMatch(key));
     };
-  }, []);
+    window.addEventListener("pagehide", flushAll);
+    return () => {
+      window.removeEventListener("pagehide", flushAll);
+      flushAll();
+    };
+  }, [flushPendingMatch]);
 
   const updateCurrentMatch = (
     type: "link" | "finals",
@@ -291,8 +301,22 @@ export function LeagueApp() {
 
   if (loading || !payload) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 text-sm font-bold text-slate-500">
-        리그 데이터를 불러오는 중...
+      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-slate-50 px-6 text-center">
+        <p className="text-sm font-bold text-slate-500">
+          {loadError ? "서버에 잠시 연결하지 못했습니다." : "리그 데이터를 불러오는 중..."}
+        </p>
+        {loadError ? (
+          <>
+            <p className="max-w-sm text-xs text-slate-400">{loadError}</p>
+            <button
+              type="button"
+              onClick={() => void load()}
+              className="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-bold text-white"
+            >
+              다시 시도
+            </button>
+          </>
+        ) : null}
       </div>
     );
   }
@@ -448,13 +472,22 @@ export function LeagueApp() {
             isAdmin={payload.isAdmin}
             onSelectGroup={setSelectedGroup}
             onUpdateMatch={(matchId, fields) => {
+              const scoreSaved = Boolean(
+                fields.s1A !== undefined ||
+                  fields.s1B !== undefined ||
+                  fields.s2A !== undefined ||
+                  fields.s2B !== undefined ||
+                  fields.s3A !== undefined ||
+                  fields.s3B !== undefined,
+              );
               updateCurrentMatch(
                 "link",
                 matchId,
                 fields,
-                Boolean(fields.date || fields.status),
+                Boolean(fields.date || fields.status || scoreSaved),
               );
               if (fields.date) toast("경기일자가 저장되었습니다.", "success");
+              if (scoreSaved) toast("세트 점수가 저장되었습니다.", "success");
               if (fields.status) {
                 toast(
                   `경기 상태가 변경되었습니다. (${fields.status === "completed" ? "종료" : "진행중"})`,
@@ -493,13 +526,22 @@ export function LeagueApp() {
             category={category}
             isAdmin={payload.isAdmin}
             onUpdateFinal={(matchId, fields) => {
+              const scoreSaved = Boolean(
+                fields.s1A !== undefined ||
+                  fields.s1B !== undefined ||
+                  fields.s2A !== undefined ||
+                  fields.s2B !== undefined ||
+                  fields.s3A !== undefined ||
+                  fields.s3B !== undefined,
+              );
               updateCurrentMatch(
                 "finals",
                 matchId,
                 fields,
-                Boolean(fields.date || fields.status),
+                Boolean(fields.date || fields.status || scoreSaved),
               );
               if (fields.date) toast("경기일자가 저장되었습니다.", "success");
+              if (scoreSaved) toast("세트 점수가 저장되었습니다.", "success");
               if (fields.status) {
                 toast(
                   `경기 상태가 변경되었습니다. (${fields.status === "completed" ? "종료" : "진행중"})`,

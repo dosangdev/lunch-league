@@ -239,6 +239,47 @@ export async function saveCategoryGroups(
   await writeCategory(key, grade, sport, current);
 }
 
+function isTransientDbError(error: unknown) {
+  const code = typeof error === "object" && error && "code" in error ? String(error.code) : "";
+  return code === "P1001" || code === "P1017" || code === "P2024" || code === "P2037";
+}
+
+async function withDbRetry<T>(task: () => Promise<T>, attempts = 3): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      return await task();
+    } catch (error) {
+      lastError = error;
+      if (!isTransientDbError(error) || attempt === attempts - 1) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 200 * (attempt + 1)));
+    }
+  }
+  throw lastError;
+}
+
+async function findMatchForUpdate(categoryId: string, type: "link" | "finals", matchId: string) {
+  if (type === "finals") {
+    const kind = matchId === "sf1" || matchId === "sf2" || matchId === "final" ? matchId : null;
+    if (kind) {
+      const byKind = await prisma.match.findFirst({ where: { categoryId, kind } });
+      if (byKind) return byKind;
+    }
+    return prisma.match.findUnique({ where: { id: `${categoryId}_${matchId}` } });
+  }
+
+  const exact = await prisma.match.findUnique({ where: { id: matchId } });
+  if (exact) return exact;
+
+  return prisma.match.findFirst({
+    where: {
+      categoryId,
+      kind: "link",
+      OR: [{ id: matchId }, { id: { endsWith: `_${matchId}` } }],
+    },
+  });
+}
+
 export async function updateMatchFields(
   grade: number,
   sport: string,
@@ -248,27 +289,28 @@ export async function updateMatchFields(
 ) {
   await ensureSeeded();
   const key = categoryKey(grade, sport);
-  const dbId = type === "finals" ? `${key}_${matchId}` : matchId;
 
-  const existing = await prisma.match.findUnique({ where: { id: dbId } });
-  if (!existing) {
-    throw new Error("경기를 찾을 수 없습니다.");
-  }
+  await withDbRetry(async () => {
+    const existing = await findMatchForUpdate(key, type, matchId);
+    if (!existing) {
+      throw new Error("경기를 찾을 수 없습니다.");
+    }
 
-  await prisma.match.update({
-    where: { id: dbId },
-    data: {
-      teamA: fields.teamA ?? existing.teamA,
-      teamB: fields.teamB ?? existing.teamB,
-      s1A: fields.s1A ?? existing.s1A,
-      s1B: fields.s1B ?? existing.s1B,
-      s2A: fields.s2A ?? existing.s2A,
-      s2B: fields.s2B ?? existing.s2B,
-      s3A: fields.s3A ?? existing.s3A,
-      s3B: fields.s3B ?? existing.s3B,
-      date: fields.date ?? existing.date,
-      status: fields.status ?? existing.status,
-    },
+    await prisma.match.update({
+      where: { id: existing.id },
+      data: {
+        teamA: fields.teamA ?? existing.teamA,
+        teamB: fields.teamB ?? existing.teamB,
+        s1A: fields.s1A ?? existing.s1A,
+        s1B: fields.s1B ?? existing.s1B,
+        s2A: fields.s2A ?? existing.s2A,
+        s2B: fields.s2B ?? existing.s2B,
+        s3A: fields.s3A ?? existing.s3A,
+        s3B: fields.s3B ?? existing.s3B,
+        date: fields.date ?? existing.date,
+        status: fields.status ?? existing.status,
+      },
+    });
   });
 }
 

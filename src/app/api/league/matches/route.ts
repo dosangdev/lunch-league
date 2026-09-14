@@ -19,10 +19,9 @@ export async function POST(request: Request) {
   try {
     await updateMatchFields(body.grade, body.sport, body.type, body.matchId, body.fields);
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "경기 저장에 실패했습니다." },
-      { status: 400 },
-    );
+    const message = error instanceof Error ? error.message : "경기 저장에 실패했습니다.";
+    const notFound = message.includes("찾을 수 없습니다");
+    return NextResponse.json({ error: message }, { status: notFound ? 404 : 503 });
   }
 
   return NextResponse.json({ ok: true });

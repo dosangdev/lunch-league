@@ -1,8 +1,23 @@
 "use client";
 
-import { Calendar, CalendarDays, Crown, RotateCcw } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Calendar, CalendarDays, Crown, RotateCcw, Save } from "lucide-react";
 import { calculateMatchResult } from "@/lib/league";
 import type { MatchRecord } from "@/lib/types";
+
+type ScoreField = "s1A" | "s1B" | "s2A" | "s2B" | "s3A" | "s3B";
+type ScoreDraft = Record<ScoreField, number>;
+
+function scoreDraft(match: MatchRecord): ScoreDraft {
+  return {
+    s1A: match.s1A,
+    s1B: match.s1B,
+    s2A: match.s2A,
+    s2B: match.s2B,
+    s3A: match.s3A,
+    s3B: match.s3B,
+  };
+}
 
 export function MatchCard({
   match,
@@ -10,7 +25,7 @@ export function MatchCard({
   isAdmin,
   isFinal,
   onDateChange,
-  onScoreChange,
+  onSaveSet,
   onTeamChange,
   onToggleStatus,
   onReset,
@@ -20,12 +35,18 @@ export function MatchCard({
   isAdmin: boolean;
   isFinal?: boolean;
   onDateChange: (date: string) => void;
-  onScoreChange: (field: "s1A" | "s1B" | "s2A" | "s2B" | "s3A" | "s3B", value: number) => void;
+  onSaveSet: (set: 1 | 2 | 3, scores: { a: number; b: number }) => void;
   onTeamChange?: (side: "teamA" | "teamB", value: string) => void;
   onToggleStatus: () => void;
   onReset: () => void;
 }) {
-  const result = calculateMatchResult(match);
+  const [draft, setDraft] = useState<ScoreDraft>(() => scoreDraft(match));
+
+  useEffect(() => {
+    setDraft(scoreDraft(match));
+  }, [match.id, match.s1A, match.s1B, match.s2A, match.s2B, match.s3A, match.s3B]);
+
+  const result = calculateMatchResult({ ...match, ...draft });
   const finished = match.status === "completed";
 
   return (
@@ -167,17 +188,24 @@ export function MatchCard({
         {([1, 2, 3] as const).map((set) => {
           const aKey = `s${set}A` as const;
           const bKey = `s${set}B` as const;
-          const a = match[aKey];
-          const b = match[bKey];
+          const a = draft[aKey];
+          const b = draft[bKey];
+          const dirty = a !== match[aKey] || b !== match[bKey];
           return (
-            <div key={set} className="flex items-center justify-between text-xs">
-              <span className="w-16 font-bold text-slate-500">{set}세트</span>
-              <div className="flex flex-1 items-center justify-center space-x-2">
+            <div key={set} className="flex items-center justify-between gap-2 text-xs">
+              <span className="w-12 shrink-0 font-bold text-slate-500 sm:w-16">{set}세트</span>
+              <div className="flex flex-1 items-center justify-center space-x-1.5 sm:space-x-2">
                 {isAdmin ? (
                   <>
-                    <ScoreStepper value={a} onChange={(value) => onScoreChange(aKey, value)} />
+                    <ScoreStepper
+                      value={a}
+                      onChange={(value) => setDraft((current) => ({ ...current, [aKey]: value }))}
+                    />
                     <span className="text-slate-400">:</span>
-                    <ScoreStepper value={b} onChange={(value) => onScoreChange(bKey, value)} />
+                    <ScoreStepper
+                      value={b}
+                      onChange={(value) => setDraft((current) => ({ ...current, [bKey]: value }))}
+                    />
                   </>
                 ) : (
                   <>
@@ -187,6 +215,21 @@ export function MatchCard({
                   </>
                 )}
               </div>
+              {isAdmin ? (
+                <button
+                  type="button"
+                  disabled={!dirty}
+                  onClick={() => onSaveSet(set, { a, b })}
+                  className={`inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-bold sm:px-2.5 ${
+                    dirty
+                      ? "bg-indigo-600 text-white shadow-sm hover:bg-indigo-700"
+                      : "cursor-not-allowed bg-slate-200 text-slate-400"
+                  }`}
+                >
+                  <Save className="h-3 w-3" />
+                  저장
+                </button>
+              ) : null}
             </div>
           );
         })}

@@ -44,7 +44,12 @@ export function FinalsView({
               isAdmin={isAdmin}
               isFinal
               onDateChange={(date) => onUpdateFinal(key, { date })}
-              onScoreChange={(field, value) => onUpdateFinal(key, { [field]: value })}
+              onSaveSet={(set, scores) =>
+                onUpdateFinal(key, {
+                  [`s${set}A`]: scores.a,
+                  [`s${set}B`]: scores.b,
+                })
+              }
               onTeamChange={(side, value) => onUpdateFinal(key, { [side]: value })}
               onToggleStatus={() =>
                 onUpdateFinal(key, {
@@ -61,7 +66,12 @@ export function FinalsView({
             isAdmin={isAdmin}
             isFinal
             onDateChange={(date) => onUpdateFinal("final", { date })}
-            onScoreChange={(field, value) => onUpdateFinal("final", { [field]: value })}
+            onSaveSet={(set, scores) =>
+              onUpdateFinal("final", {
+                [`s${set}A`]: scores.a,
+                [`s${set}B`]: scores.b,
+              })
+            }
             onTeamChange={(side, value) => onUpdateFinal("final", { [side]: value })}
             onToggleStatus={() =>
               onUpdateFinal("final", {

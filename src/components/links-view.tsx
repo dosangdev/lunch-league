@@ -141,8 +141,11 @@ export function LinksView({
               index={index}
               isAdmin={isAdmin}
               onDateChange={(date) => onUpdateMatch(match.id, { date })}
-              onScoreChange={(field, value) =>
-                onUpdateMatch(match.id, { [field]: value })
+              onSaveSet={(set, scores) =>
+                onUpdateMatch(match.id, {
+                  [`s${set}A`]: scores.a,
+                  [`s${set}B`]: scores.b,
+                })
               }
               onToggleStatus={() =>
                 onUpdateMatch(match.id, {

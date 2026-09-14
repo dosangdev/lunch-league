@@ -15,8 +15,17 @@ async function parseJson<T>(resPromise: Promise<Response>): Promise<T> {
   return body as T;
 }
 
-export function fetchLeague() {
-  return parseJson<AppStateResponse>(fetch("/api/league", { cache: "no-store" }));
+export async function fetchLeague() {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await parseJson<AppStateResponse>(fetch("/api/league", { cache: "no-store" }));
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 800 * (attempt + 1)));
+    }
+  }
+  throw lastError;
 }
 
 export function loginAdmin(pin: string) {
@@ -58,6 +67,30 @@ export function saveGroups(payload: {
   );
 }
 
+let matchSaveQueue = Promise.resolve();
+
+function enqueueMatchSave<T>(task: () => Promise<T>): Promise<T> {
+  const run = matchSaveQueue.then(task, task);
+  matchSaveQueue = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
+async function withRetry<T>(task: () => Promise<T>, attempts = 3): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      return await task();
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 300 * (attempt + 1)));
+    }
+  }
+  throw lastError;
+}
+
 export function saveMatch(payload: {
   grade: number;
   sport: string;
@@ -65,12 +98,16 @@ export function saveMatch(payload: {
   matchId: string;
   fields: Partial<MatchRecord>;
 }) {
-  return parseJson<{ ok: boolean }>(
-    fetch("/api/league/matches", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    }),
+  return enqueueMatchSave(() =>
+    withRetry(() =>
+      parseJson<{ ok: boolean }>(
+        fetch("/api/league/matches", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }),
+      ),
+    ),
   );
 }
 
